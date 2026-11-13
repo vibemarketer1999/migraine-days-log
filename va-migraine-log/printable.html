@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Printable migraine log for VA claims (free, independent, not from the VA)</title>
+<meta name="description" content="A free one-page migraine log to print and fill in by hand: date, pain, hours, had to lie down, missed work, medication.">
+<link rel="icon" href="../app/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
+<style>
+  .log td, .log th { border: 1px solid #888; height: 30px; text-align: left; white-space: normal; }
+  .log th { font-size: .72rem; }
+  .fill { display: flex; gap: 24px; flex-wrap: wrap; margin: 10px 0; }
+  .fill span { flex: 1; border-bottom: 1px solid #888; min-width: 160px; padding-bottom: 2px; }
+  @media print { @page { size: letter; margin: 0.5in; } h1 { font-size: 16pt; margin: 0 0 6pt; } .wrap { max-width: none; padding: 0; } .log td { height: 24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="site"><a href="./"><b>Migraine Days Log</b></a><a href="../app/">Phone version</a></header>
+<p class="noprint"><button class="btn" onclick="print()" style="border:0;cursor:pointer;font:inherit;font-weight:600">Print this page</button> <span class="muted">One page per month. Prefer tapping to writing? <a href="../app/">The phone log is free too.</a></span></p>
+
+<h1>Migraine log</h1>
+<div class="fill"><span>Name:</span><span>Month and year:</span></div>
+<p class="muted">Fill in a row on each attack day, the same day if you can. At month end, write the totals. Log what happened, in your own words.</p>
+<table class="log">
+  <thead><tr><th style="width:11%">Date</th><th style="width:9%">Worst pain 0-10</th><th style="width:9%">Hours it lasted</th><th style="width:11%">Had to stop and lie down? Y/N</th><th style="width:11%">Missed work or school? Y/N</th><th style="width:17%">Medication taken</th><th>What happened</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="fill" style="margin-top:14px"><span>Migraine days this month:</span><span>Days I had to lie down:</span><span>Days I missed work or school:</span></div>
+<p class="muted">A record-keeping sheet, not medical or legal advice. Not affiliated with the Department of Veterans Affairs. migraine days log</p>
+</div>
+<script>document.getElementById('rows').innerHTML = ('<tr>' + '<td></td>'.repeat(7) + '</tr>').repeat(16);</script>
+</body>
+</html>
