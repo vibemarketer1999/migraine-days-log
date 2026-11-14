@@ -110,7 +110,7 @@ input[type=range]::-moz-range-thumb { width: 28px; height: 28px; border-radius: 
 .row:has(> [data-format]), .row:has(> [data-span]) { display: grid; grid-template-columns: repeat(3, 1fr); }
 .row > [data-format], .row > [data-span] { font-size: .9rem; padding-inline: 6px; }
 .card > button { display: block; margin-top: 14px; }
-.card > .row + .row, .card > p.row { margin-top: 12px; }
+.card > p.row { margin-top: 12px; }
 #medName { margin: 4px 0 8px; }
 
 /* Today */
@@ -149,8 +149,8 @@ input[type=range]::-moz-range-thumb { width: 28px; height: 28px; border-radius: 
 .legend i.migraine { background: var(--migraine); border-color: transparent; }
 
 /* Numbers: two big counts, then a quiet list */
-.big-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 16px 0 6px; }
-.big { padding: 4px 0 4px 0; }
+.big-nums { display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 6px; }
+.big { padding: 4px 0; }
 .big + .big { padding-left: 20px; border-left: 1px solid var(--line); }
 .big b { display: block; font: 300 3.4rem/1 var(--serif); font-variant-numeric: tabular-nums lining-nums; letter-spacing: -.01em; }
 .big span { display: block; margin-top: 6px; font-size: .9rem; color: var(--muted); }

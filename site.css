@@ -39,7 +39,7 @@ p { margin: 14px 0; }
 header.site { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 24px; flex-wrap: wrap; padding: 26px 0 0; font-size: .95rem; }
 header.site b { font: 400 1.35rem var(--serif); }
 header.site a { text-decoration: none; }
-header.site span a + a, header.site a + a { margin-left: 22px; }
+header.site a + a { margin-left: 22px; }
 header.site span a:hover, header.site > a:hover { text-decoration: underline; }
 
 /* hero */
@@ -107,7 +107,6 @@ footer p { margin: 10px 0; }
   .sec.one > .pane { padding: 34px 42px; }
 }
 @media (max-width: 560px) {
-  body { font-size: 18px; }
   .wrap { padding: 0 20px; }
   .pane { padding: 26px 22px; }
   footer.pane { padding: 24px 22px; }
