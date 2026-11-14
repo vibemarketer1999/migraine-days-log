@@ -51,6 +51,7 @@
     view.innerHTML = `
       ${backupNudge()}
       ${S.demo ? '<div class="card notice">You are looking at made-up DEMO data. Anything you add now gets mixed in with it. <button id="endDemo">Remove demo data and start my log</button></div>' : ''}
+      <section class="card">
       <h2>${ui.date === todayKey ? 'How was today?' : niceDate(ui.date)}</h2>
       <label for="date" class="muted">Logging for</label>
       <input type="date" id="date" value="${ui.date}" max="${todayKey}">
@@ -60,8 +61,9 @@
         <button class="migraine" data-t="migraine" ${pressed('migraine')}>Migraine</button>
       </div>
       <p class="muted">Whether a day counts as a migraine is your call, or your doctor's definition. Log the clear days too. A day with no entry is counted as "not logged", never as headache-free.</p>
-      ${detail}
-      ${e ? '<p class="muted">Saved on this device. <button id="clearDay" class="noprint">Clear this day</button></p>' : ''}`;
+      ${e ? '<p class="muted">Saved on this device. <button id="clearDay" class="noprint">Clear this day</button></p>' : ''}
+      </section>
+      ${detail}`;
 
     $('#date').onchange = (ev) => { if (ev.target.value && ev.target.value <= todayKey) { ui.date = ev.target.value; render(); } };
     view.querySelectorAll('.pick button').forEach((b) => (b.onclick = () => {
@@ -91,8 +93,7 @@
   // ---------- Calendar ----------
   function monthNav() {
     const atNow = ui.y === now.getFullYear() && ui.m === now.getMonth() + 1;
-    return `<div class="row noprint"><button id="prevM" aria-label="Previous month">&larr;</button>
-      <h2 style="text-align:center;flex:3;margin:0">${MONTHS[ui.m - 1]} ${ui.y}</h2>
+    return `<div class="nav noprint"><h2>${MONTHS[ui.m - 1]} ${ui.y}</h2><button id="prevM" aria-label="Previous month">&larr;</button>
       <button id="nextM" aria-label="Next month" ${atNow ? 'disabled' : ''}>&rarr;</button></div>`;
   }
   function wireMonthNav() {
@@ -111,9 +112,9 @@
       const label = `${niceDate(k)}: ${e ? (e.t === 'none' ? 'no headache' : e.t) : 'not logged'}`;
       cells += `<button class="${e ? e.t : ''} ${future ? 'future' : ''}" data-day="${k}" ${future ? 'disabled' : ''} aria-label="${label}">${d}<small>${e ? mark[e.t] : ''}</small></button>`;
     }
-    view.innerHTML = `${monthNav()}<div class="cal" style="margin-top:12px">${cells}</div>
-      <div class="legend"><span><i style="background:var(--none)"></i>No headache</span><span><i style="background:var(--headache)"></i>H Headache</span><span><i style="background:var(--migraine)"></i>M Migraine</span><span><i></i>Not logged</span></div>
-      <p class="muted">Tap a day to add or change it.</p>`;
+    view.innerHTML = `<section class="card">${monthNav()}<div class="cal">${cells}</div>
+      <div class="legend"><span><i class="none"></i>No headache</span><span><i class="headache"></i>H Headache</span><span><i class="migraine"></i>M Migraine</span><span><i></i>Not logged</span></div>
+      <p class="muted">Tap a day to add or change it.</p></section>`;
     wireMonthNav();
     view.querySelectorAll('[data-day]').forEach((b) => (b.onclick = () => { ui.date = b.dataset.day; go('today'); }));
   }
@@ -166,18 +167,19 @@
   }
   function numbers() {
     const c = C.monthCounts(S.days, ui.y, ui.m);
-    const stat = (n, label) => `<div class="stat"><b>${n}</b><span>${label}</span></div>`;
+    const big = (n, label) => `<div class="big"><b>${n}</b><span>${label}</span></div>`;
+    const stat = (n, label) => `<div><dt>${label}</dt><dd>${n}</dd></div>`;
     const more = full()
-      ? `<h3>Last ${ui.span} complete months</h3>${spanPicker()}${monthTable(C.lastMonths(S.days, END.y, END.m, ui.span), Object.keys(COLS))}<p class="muted">The month in progress is left out so it does not pull the averages down.</p>${baselineBlock()}`
+      ? `<section class="card"><h3>Last ${ui.span} complete months</h3>${spanPicker()}${monthTable(C.lastMonths(S.days, END.y, END.m, ui.span), Object.keys(COLS))}<p class="muted">The month in progress is left out so it does not pull the averages down.</p>${baselineBlock()}</section>`
       : lockCard('Month-by-month history, averages and the then-and-now comparison');
-    view.innerHTML = `${monthNav()}
-      <div class="stats" style="margin-top:12px">
-        ${stat(c.headacheDays, 'Headache days')}${stat(c.migraineDays, 'Migraine days')}
+    view.innerHTML = `<section class="card">${monthNav()}
+      <div class="big-nums">${big(c.headacheDays, 'Headache days')}${big(c.migraineDays, 'Migraine days')}</div>
+      <dl class="rest">
         ${stat(c.medDays, 'Days you took medication')}${stat(c.severeDays, 'Severe days (pain 7+)')}
         ${stat(c.restDays, 'Days you had to lie down')}${stat(c.missedDays, 'Days you missed work or school')}
         ${stat(c.headacheFree, 'Headache-free days')}${stat(`${c.logged}/${c.daysInMonth}`, 'Days logged')}
-      </div>
-      <p class="muted">Migraine days are also counted as headache days. Your doctor may ask about any of these numbers.</p>
+      </dl>
+      <p class="muted">Migraine days are also counted as headache days. Your doctor may ask about any of these numbers.</p></section>
       ${more}`;
     wireMonthNav(); wireSpan(); wireBaseline();
   }
@@ -196,7 +198,7 @@
   };
   function report() {
     if (!full()) {
-      view.innerHTML = `<h2>Report</h2><p>A printable summary of your log for a doctor visit, an insurance form or a VA claim: month-by-month counts, averages, a then-and-now comparison and the preventives you have tried.</p>${lockCard('The printable report')}`;
+      view.innerHTML = `<section class="card"><h2>Report</h2><p>A printable summary of your log for a doctor visit, an insurance form or a VA claim: month-by-month counts, averages, a then-and-now comparison and the preventives you have tried.</p></section>${lockCard('The printable report')}`;
       return;
     }
     const f = FORMATS[ui.format];
@@ -216,10 +218,10 @@
       <p class="muted">The regulation does not define "prostrating". This log records the migraine days the person had to stop and lie down, in their own words. It does not predict or suggest a rating; VA decides that. VA-recognized Veterans Service Organizations have accredited representatives who help with claims for free.</p>`;
     const extra = { doctor: `${baselineBlock()}${prevTable}${attackTable}<h3>Questions for my doctor</h3><div class="box"></div>`, insurance: `${baselineBlock()}${prevTable}`, va: `${attackTable}${va}` }[ui.format];
     view.innerHTML = `
-      <div class="noprint"><h2>Report</h2>
+      <section class="card noprint"><h2>Report</h2>
         <div class="row">${Object.entries(FORMATS).map(([k, v]) => `<button data-format="${k}" ${ui.format === k ? 'class="primary"' : ''}>${v.name}</button>`).join('')}</div>
         <div style="height:8px"></div>${spanPicker()}
-        <p><button class="primary" id="print">Print or save as PDF</button></p></div>
+        <p><button class="primary" id="print">Print or save as PDF</button></p></section>
       <div class="card">
         <h2>${f.title}${S.demo ? ' (DEMO DATA)' : ''}</h2>
         <p class="muted">${monthName(months[0])} to ${monthName(months[months.length - 1])}. Complete months only. Self-reported by the person named below; entries can be added or changed after the day. Printed ${niceDate(todayKey)}.</p>
@@ -237,34 +239,35 @@
   // ---------- More ----------
   function more() {
     const prev = full() ? `
-      <h3>Preventive treatments tried</h3>
-      ${S.prev.map((p, i) => `<div class="card"><b>${esc(p.name)}</b> ${esc(p.dose)}<br><span class="muted">${esc(p.start)} to ${esc(p.stop || 'now')}${p.why ? `. Stopped: ${esc(p.why)}` : ''}</span><br><button data-del="${i}">Remove</button></div>`).join('')}
-      <form id="prevForm" class="card">
+      <section class="card"><h3>Preventive treatments tried</h3>
+      ${S.prev.map((p, i) => `<div class="item"><b>${esc(p.name)}</b> ${esc(p.dose)}<br><span class="muted">${esc(p.start)} to ${esc(p.stop || 'now')}${p.why ? `. Stopped: ${esc(p.why)}` : ''}</span><br><button data-del="${i}">Remove</button></div>`).join('')}
+      <form id="prevForm" class="item">
         <label for="pName">Treatment</label><input type="text" id="pName" required>
         <label for="pDose">Dose (optional)</label><input type="text" id="pDose">
         <div class="row"><div><label for="pStart">Started</label><input type="month" id="pStart"></div><div><label for="pStop">Stopped</label><input type="month" id="pStop"></div></div>
         <label for="pWhy">Why it was stopped</label>
         <select id="pWhy"><option value="">Still taking it</option><option>Side effects</option><option>Did not help</option><option>Insurance or cost</option><option>Other</option></select>
         <p><button class="primary">Add treatment</button></p>
-      </form>` : '';
+      </form></section>` : '';
     view.innerHTML = `
-      <h2>More</h2>
-      ${S.unlocked ? '<p class="card notice">Full log unlocked on this device. Thank you.</p>' : `<div class="card"><b>Unlock the full log</b>
+      <section class="card"><h2>More</h2>
+      ${S.unlocked ? '<p>Full log unlocked on this device. Thank you.</p>' : `<b>Unlock the full log</b>
         <label for="code">Code from your purchase email</label><input type="text" id="code" autocomplete="off" autocapitalize="characters">
-        <p class="row"><button class="primary" id="unlock">Unlock</button><a href="${SALES_URL}"><button>Get the full log</button></a></p><p id="codeMsg" class="muted" role="status"></p></div>`}
+        <p class="row"><button class="primary" id="unlock">Unlock</button><a href="${SALES_URL}"><button>Get the full log</button></a></p><p id="codeMsg" class="muted" role="status"></p>`}</section>
       ${prev}
-      <h3>Backup</h3>
+      <section class="card"><h3>Backup</h3>
       <p class="muted">Your entries are saved only in this browser on this device. We never receive them, so we can't restore them for you. They can be erased if you clear browsing data, use private mode or switch browser or phone, and on iPhone if you don't open the log for a while. Download a backup every week. Backup, export and printed files are not encrypted, so keep them somewhere private.</p>
       <div class="row"><button class="primary" id="backup">Download backup</button><button id="restoreBtn">Restore from file</button></div>
       <input type="file" id="restore" accept="application/json,.json" hidden>
       ${full() ? '<p><button id="csv">Export days as a spreadsheet (CSV)</button></p>' : ''}
       <p class="muted" id="backupMsg" role="status">${S.lastBackup ? `Last backup: ${new Date(S.lastBackup).toLocaleDateString()}` : 'No backup yet.'}</p>
-      <h3>Keep it on your home screen</h3>
+      </section>
+      <section class="card"><h3>Keep it on your home screen</h3>
       <p class="muted">In your browser menu choose "Add to Home Screen". The log then opens like an app, works offline, and iPhone is less likely to clear its data.</p>
       <h3>Try it with sample data</h3>
       <p class="muted">Fills six months with made-up entries, labeled DEMO everywhere, so you can see the report before logging anything.</p>
       <div class="row"><button id="demo" ${Object.keys(S.days).length && !S.demo ? 'disabled' : ''}>Load DEMO data</button><button class="danger" id="wipe">Delete all data</button></div>
-      <p class="muted">${DISCLAIMER} It never suggests a treatment. If a headache is sudden, severe or different from your usual, get medical help.</p>`;
+      <p class="muted">${DISCLAIMER} It never suggests a treatment. If a headache is sudden, severe or different from your usual, get medical help.</p></section>`;
 
     if ($('#unlock')) $('#unlock').onclick = async () => {
       const code = $('#code').value.trim().toUpperCase();

@@ -8,18 +8,34 @@
 <link rel="icon" href="../app/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../site.css">
 <style>
-  .log td, .log th { border: 1px solid #888; height: 30px; text-align: left; white-space: normal; }
+  /* On screen the sheet is a white paper card on the ground; in print it is plain black on white. */
+  .paper { background: #fffdf9; color: #1f1a16; border-radius: 6px; padding: 40px; margin: 8px 0 56px; max-width: 900px; box-shadow: 0 24px 60px rgba(0, 0, 0, .4); }
+  .paper h1 { font: 400 2.2rem/1.1 var(--serif); margin: 0 0 12px; max-width: none; letter-spacing: 0; }
+  .paper .muted { color: #4a4039; }
+  .paper th, .paper td { color: #1f1a16; }
+  .paper th { color: #4a4039; }
+  .log td, .log th { border: 1px solid #888; height: 30px; text-align: left; white-space: normal; padding: 6px 8px; }
   .log th { font-size: .72rem; }
   .fill { display: flex; gap: 24px; flex-wrap: wrap; margin: 10px 0; }
   .fill span { flex: 1; border-bottom: 1px solid #888; min-width: 160px; padding-bottom: 2px; }
-  @media print { @page { size: letter; margin: 0.5in; } h1 { font-size: 16pt; margin: 0 0 6pt; } .wrap { max-width: none; padding: 0; } .log td { height: 24px; } }
+  .lead { margin: 40px 0 0; }
+  @media (max-width: 700px) { .paper { padding: 24px 18px; overflow-x: auto; } .log { min-width: 560px; } }
+  @media print {
+    @page { size: letter; margin: 0.5in; }
+    .paper { background: #fff; box-shadow: none; padding: 0; margin: 0; max-width: none; border-radius: 0; }
+    .paper h1 { font: 600 16pt var(--serif); margin: 0 0 6pt; }
+    .wrap { max-width: none; padding: 0; }
+    .log td { height: 24px; }
+    * { color: #000 !important; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 <header class="site"><a href="./"><b>Migraine Days Log</b></a><a href="../app/">Phone version</a></header>
-<p class="noprint"><button class="btn" onclick="print()" style="border:0;cursor:pointer;font:inherit;font-weight:600">Print this page</button> <span class="muted">One page per month. Prefer tapping to writing? <a href="../app/">The phone log is free too.</a></span></p>
+<p class="noprint lead"><button class="btn" onclick="print()" style="cursor:pointer;font:inherit;font-weight:600">Print this page</button> <span class="muted">One page per month. Prefer tapping to writing? <a href="../app/">The phone log is free too.</a></span></p>
 
+<div class="paper">
 <h1>Migraine log</h1>
 <div class="fill"><span>Name:</span><span>Month and year:</span></div>
 <p class="muted">Fill in a row on each attack day, the same day if you can. At month end, write the totals. Log what happened, in your own words.</p>
@@ -29,6 +45,7 @@
 </table>
 <div class="fill" style="margin-top:14px"><span>Migraine days this month:</span><span>Days I had to lie down:</span><span>Days I missed work or school:</span></div>
 <p class="muted">A record-keeping sheet, not medical or legal advice. Not affiliated with the Department of Veterans Affairs. migraine days log</p>
+</div>
 </div>
 <script>document.getElementById('rows').innerHTML = ('<tr>' + '<td></td>'.repeat(7) + '</tr>').repeat(16);</script>
 </body>
