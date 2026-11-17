@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Printable headache diary: one page per month (free)</title>
+<meta name="description" content="A free one-page headache diary to print: one row per day of the month, with clear, headache or migraine, pain, medication and monthly totals.">
+<link rel="icon" href="../app/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
+<style>
+  /* On screen the sheet is a white paper card on the ground; in print it is plain black on white. */
+  .paper { background: #fffdf9; color: #1f1a16; border-radius: 6px; padding: 40px; margin: 8px 0 56px; max-width: 900px; box-shadow: 0 24px 60px rgba(0, 0, 0, .4); }
+  .paper h1 { font: 400 2.2rem/1.1 var(--serif); margin: 0 0 12px; max-width: none; letter-spacing: 0; }
+  .paper .muted, .paper th { color: #4a4039; }
+  .paper td { color: #1f1a16; }
+  .log td, .log th { border: 1px solid #888; height: 24px; text-align: left; white-space: normal; padding: 2px 8px; }
+  .log th { font-size: .72rem; padding: 6px 8px; }
+  .log td:first-child { text-align: center; padding: 2px; }
+  .fill { display: flex; gap: 24px; flex-wrap: wrap; margin: 10px 0; }
+  .fill span { flex: 1; border-bottom: 1px solid #888; min-width: 150px; padding-bottom: 2px; }
+  .lead { margin: 40px 0 0; }
+  @media (max-width: 700px) { .paper { padding: 24px 18px; overflow-x: auto; } .log { min-width: 560px; } }
+  @media print {
+    @page { size: letter; margin: 0.45in; }
+    .paper { background: #fff; box-shadow: none; padding: 0; margin: 0; max-width: none; border-radius: 0; }
+    .paper h1 { font: 600 15pt var(--serif); margin: 0 0 4pt; }
+    .paper p { margin: 4pt 0; font-size: 9pt; }
+    .wrap { max-width: none; padding: 0; }
+    .log td { height: 19px; font-size: 8.5pt; }
+    .fill { margin: 6pt 0; font-size: 9.5pt; }
+    * { color: #000 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="site"><a href="./"><b>Migraine Days Log</b></a><a href="../app/">Phone version</a></header>
+<p class="noprint lead"><button class="btn" onclick="print()" style="cursor:pointer;font:inherit;font-weight:600">Print this page</button> <span class="muted">One page per month. Prefer tapping to writing? <a href="../app/">The phone diary has a free version too.</a></span></p>
+
+<div class="paper">
+<h1>Headache diary</h1>
+<div class="fill"><span>Name:</span><span>Month and year:</span></div>
+<p class="muted">Every day, write C for a clear day, H for a headache day or M for a migraine day. Fill in the rest only on H and M days. Leave a row blank if you didn't record that day.</p>
+<table class="log">
+  <thead><tr><th style="width:6%">Day</th><th style="width:10%">C, H or M</th><th style="width:10%">Worst pain 0-10</th><th style="width:18%">Medication taken</th><th style="width:12%">Had to lie down? Y/N</th><th style="width:13%">Missed work or school? Y/N</th><th>Notes</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="fill" style="margin-top:12px"><span>Headache days (H + M):</span><span>Migraine days (M):</span><span>Days I took medication:</span><span>Days not recorded:</span></div>
+<p class="muted">A record-keeping sheet. It is not medical advice and does not diagnose anything. migraine days log</p>
+</div>
+</div>
+<script>
+  // 31 rows; cross out the days your month doesn't have.
+  document.getElementById('rows').innerHTML = Array.from({ length: 31 }, (_, i) => '<tr><td>' + (i + 1) + '</td>' + '<td></td>'.repeat(6) + '</tr>').join('');
+</script>
+</body>
+</html>
