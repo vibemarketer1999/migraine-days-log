@@ -14,7 +14,7 @@
     };
     for (let d = 1; d <= c.daysInMonth; d++) {
       const e = days[key(y, m, d)];
-      if (!e) continue;
+      if (!e || e.deleted) continue; // deleted days are sync tombstones: same as never logged
       c.logged++;
       if (e.t === 'none') { c.headacheFree++; continue; }
       c.headacheDays++; // a migraine day is also a headache day
@@ -69,7 +69,7 @@
     const from = key(first.getFullYear(), first.getMonth() + 1, 1);
     const to = key(y, m, daysIn(y, m));
     return Object.keys(days).sort()
-      .filter((k) => k >= from && k <= to && days[k].t !== 'none')
+      .filter((k) => k >= from && k <= to && days[k].t !== 'none' && !days[k].deleted)
       .map((k) => ({ date: k, ...days[k] }));
   }
 

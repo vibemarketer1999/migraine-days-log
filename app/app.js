@@ -1,6 +1,6 @@
-// Migraine Days Log. Everything stays in this browser: no network calls, no third-party scripts.
+// Migraine Days Log. Everything stays in this browser unless the person turns on sync: then, and only then, it loads the bundled Firebase code.
 (() => {
-  const C = window.Counts;
+  const C = window.Counts, Merge = window.Merge;
   const STORE = 'mdl.v1';
   const SALES_URL = '../#get'; // the buy section of the landing page
   // ponytail: one shared unlock code, checked by hash. Anyone can share it.
@@ -11,14 +11,17 @@
 
   const now = new Date();
   const todayKey = C.key(now.getFullYear(), now.getMonth() + 1, now.getDate());
-  const S = Object.assign({ days: {}, prev: [], unlocked: false, lastBackup: 0, demo: false, baseline: '' }, read());
-  const ui = { tab: 'today', date: todayKey, y: now.getFullYear(), m: now.getMonth() + 1, span: 3, format: 'doctor' };
+  const S = Object.assign({ days: {}, prev: [], unlocked: false, lastBackup: 0, demo: false, baseline: '', prevU: 0, baselineU: 0 }, read());
+  const ui = { syncOpen: false, pending: false, relogin: false, tab: 'today', date: todayKey, y: now.getFullYear(), m: now.getMonth() + 1, span: 3, format: 'doctor' };
 
   function read() {
     try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
   }
   const snapshot = () => JSON.stringify(S); // the stored state and the backup file are the same JSON
-  function save() {
+  const day = (k) => { const e = S.days[k]; return e && !e.deleted ? e : undefined; }; // deleted days are sync tombstones
+  const keys = () => Object.keys(S.days).filter((k) => !S.days[k].deleted);
+  function save(quiet) {
+    if (!quiet && sy() && !S.demo) schedule();
     try { localStorage.setItem(STORE, snapshot()); }
     catch { alert('This entry could not be saved. Your browser may be in private mode or out of storage. Use "Save a copy" in More.'); }
   }
@@ -34,7 +37,7 @@
 
   // ---------- Today ----------
   function today() {
-    const e = S.days[ui.date];
+    const e = day(ui.date);
     const pressed = (t) => `aria-pressed="${e?.t === t}"`;
     const detail = e && e.t !== 'none' ? `
       <div class="card">
@@ -69,13 +72,13 @@
     $('#date').onchange = (ev) => { if (ev.target.value && ev.target.value <= todayKey) { ui.date = ev.target.value; render(); } };
     view.querySelectorAll('.pick button').forEach((b) => (b.onclick = () => {
       const t = b.dataset.t;
-      S.days[ui.date] = t === 'none' ? { t } : { ...S.days[ui.date], t };
+      S.days[ui.date] = { ...(t === 'none' ? {} : day(ui.date)), t, u: Date.now() };
       save(); render();
     }));
     if ($('#endDemo')) $('#endDemo').onclick = () => { Object.assign(S, { days: {}, prev: [], demo: false, baseline: '' }); save(); render(); };
-    if ($('#clearDay')) $('#clearDay').onclick = () => { delete S.days[ui.date]; save(); render(); };
+    if ($('#clearDay')) $('#clearDay').onclick = () => { S.days[ui.date] = { deleted: true, u: Date.now() }; save(); render(); };
     if (!detail) return;
-    const set = (k, v) => { S.days[ui.date][k] = v; save(); };
+    const set = (k, v) => { S.days[ui.date][k] = v; S.days[ui.date].u = Date.now(); save(); };
     $('#pain').oninput = (ev) => { $('#painOut').textContent = ev.target.value; set('pain', Number(ev.target.value)); };
     $('#med').onchange = (ev) => { set('med', ev.target.checked); $('#medName').hidden = !ev.target.checked; };
     $('#medName').oninput = (ev) => set('medName', ev.target.value);
@@ -86,7 +89,7 @@
   }
 
   function backupNudge() {
-    const hasData = Object.keys(S.days).length > 0 && !S.demo;
+    const hasData = keys().length > 0 && !S.demo;
     if (!hasData || Date.now() - S.lastBackup < 7 * 864e5) return '';
     return `<div class="card notice noprint">It has been a while since your last backup. Your log lives only on this device, so a backup file is the safety net. <button data-go="more">Back up now</button></div>`;
   }
@@ -108,7 +111,7 @@
     let cells = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => `<div class="dow">${d}</div>`).join('') + '<div></div>'.repeat(lead);
     for (let d = 1; d <= C.daysIn(ui.y, ui.m); d++) {
       const k = C.key(ui.y, ui.m, d);
-      const e = S.days[k];
+      const e = day(k);
       const future = k > todayKey;
       const label = `${niceDate(k)}: ${e ? (e.t === 'none' ? 'no headache' : e.t) : 'not logged'}`;
       cells += `<button class="${e ? e.t : ''} ${future ? 'future' : ''}" data-day="${k}" ${future ? 'disabled' : ''} aria-label="${label}">${d}<small>${e ? mark[e.t] : ''}</small></button>`;
@@ -140,7 +143,7 @@
   }
   // "Then and now": the first 3 months of the log (or 3 months from a start the user picks) against the last 3 complete months.
   function baselineBlock() {
-    const first = Object.keys(S.days).sort()[0];
+    const first = keys().sort()[0];
     if (!first) return '';
     const start = S.baseline || first.slice(0, 7);
     const [by, bm] = start.split('-').map(Number);
@@ -164,7 +167,7 @@
       <p class="muted">The starting period is the first months you logged unless you change it. It is only a pre-treatment baseline if you were logging before the treatment began. Months with unlogged days make these averages less reliable.</p>`;
   }
   function wireBaseline() {
-    if ($('#baseline')) $('#baseline').onchange = (ev) => { S.baseline = ev.target.value; save(); render(); };
+    if ($('#baseline')) $('#baseline').onchange = (ev) => { S.baseline = ev.target.value; S.baselineU = Date.now(); save(); render(); };
   }
   function numbers() {
     const c = C.monthCounts(S.days, ui.y, ui.m);
@@ -259,7 +262,7 @@
       <section class="card"><h3>Keep your log safe</h3>
       <p id="persistMsg" class="muted" role="status"></p>
       ${/iPhone|iPad/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches ? '<p class="hl">On iPhone, add this to your Home Screen (Share \u2192 Add to Home Screen) so Safari doesn\u2019t clear it.</p>' : ''}
-      <p class="muted">Your entries are saved only in this browser on this device. We never receive them, so we can\u2019t restore them for you. What erases the log:</p>
+      <p class="muted">Without sync, your entries are saved only in this browser on this device and we never receive them, so we can\u2019t restore them for you. What erases the log:</p>
       <ul class="muted">
         <li>Clearing \u201ccookies and site data\u201d, or all browsing data.</li>
         <li>Private or incognito windows.</li>
@@ -272,6 +275,7 @@
       <p class="muted" id="backupMsg" role="status">${S.lastBackup ? `Last backup: ${new Date(S.lastBackup).toLocaleDateString()}` : 'No backup yet.'}</p>
       <p class="muted">Backup, export and printed files are not encrypted, so keep them somewhere private.</p>
       </section>
+      ${syncPane()}
       ${full() ? `<section class="card"><h3>Export</h3>
       <div class="row"><button id="csv">Spreadsheet (CSV)</button><button id="md">Obsidian / Markdown</button></div>
       <p class="muted">The spreadsheet is for Excel or Google Sheets.</p>
@@ -283,7 +287,7 @@
       <p class="muted">In your browser menu choose "Add to Home Screen". The log then opens like an app, works offline, and iPhone is less likely to clear its data.</p>
       <h3>Try it with sample data</h3>
       <p class="muted">Fills six months with made-up entries, labeled DEMO everywhere, so you can see the report before logging anything.</p>
-      <div class="row"><button id="demo" ${Object.keys(S.days).length && !S.demo ? 'disabled' : ''}>Load DEMO data</button><button class="danger" id="wipe">Delete all data</button></div>
+      <div class="row"><button id="demo" ${keys().length && !S.demo ? 'disabled' : ''}>Load DEMO data</button><button class="danger" id="wipe">Delete all data</button></div>
       <p class="muted">${DISCLAIMER} It never suggests a treatment. If a headache is sudden, severe or different from your usual, get medical help.</p></section>`;
 
     if ($('#unlock')) $('#unlock').onclick = async () => {
@@ -295,14 +299,14 @@
     if ($('#prevForm')) $('#prevForm').onsubmit = (ev) => {
       ev.preventDefault();
       S.prev.push({ name: $('#pName').value.trim(), dose: $('#pDose').value.trim(), start: $('#pStart').value, stop: $('#pStop').value, why: $('#pWhy').value });
-      save(); render();
+      S.prevU = Date.now(); save(); render();
     };
-    view.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { S.prev.splice(Number(b.dataset.del), 1); save(); render(); }));
+    view.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { S.prev.splice(Number(b.dataset.del), 1); S.prevU = Date.now(); save(); render(); }));
     const persistMsg = (p) => { $('#persistMsg').textContent = p ? 'This browser has agreed to keep your log.' : 'This browser may clear your log to save space. Saving a copy protects it.'; };
     if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(persistMsg).catch(() => persistMsg(false));
     else persistMsg(false);
     $('#backup').onclick = async () => {
-      const name = `migraine-log-backup-${todayKey}.json`, text = snapshot();
+      const name = `migraine-log-backup-${todayKey}.json`, text = JSON.stringify(S, (k, v) => (k === 'sync' ? undefined : v)); // the sign-in email stays out of the file
       try {
         const file = new File([text], name, { type: 'application/json' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -317,8 +321,11 @@
       try {
         const data = JSON.parse(await ev.target.files[0].text());
         if (!data?.days || typeof data.days !== 'object') throw new Error('not a backup');
-        if (Object.keys(S.days).length && !confirm('Replace what is on this device with the backup file?')) return;
-        Object.assign(S, { days: data.days, prev: Array.isArray(data.prev) ? data.prev : [], baseline: data.baseline || '', demo: !!data.demo, unlocked: S.unlocked || !!data.unlocked, lastBackup: Date.now() });
+        if (keys().length && !confirm('Replace what is on this device with the backup file?')) return;
+        const t = Date.now(), nd = {};
+        for (const k in data.days) nd[k] = { ...data.days[k], u: t };
+        if (sy()) for (const k of keys()) if (!nd[k]) nd[k] = { deleted: true, u: t }; // so the restore reaches the other devices
+        Object.assign(S, { days: nd, prevU: t, baselineU: t, prev: Array.isArray(data.prev) ? data.prev : [], baseline: data.baseline || '', demo: !!data.demo, unlocked: S.unlocked || !!data.unlocked, lastBackup: Date.now() });
         save(); render();
       } catch { $('#backupMsg').textContent = 'That file is not a Migraine Days Log backup.'; }
     };
@@ -337,13 +344,20 @@
       $('#askGpt').onclick = () => ask('https://chatgpt.com/');
       $('#askClaude').onclick = () => ask('https://claude.ai/new');
     }
+    wireSync();
     $('#demo').onclick = () => { S.days = demoDays(); S.demo = true; save(); render(); };
-    $('#wipe').onclick = () => { if (confirm('Delete every entry on this device? This cannot be undone.')) { Object.assign(S, { days: {}, prev: [], demo: false, baseline: '', lastBackup: 0 }); save(); render(); } };
+    $('#wipe').onclick = () => {
+      if (!confirm('Delete every entry on this device? This cannot be undone.')) return;
+      const t = Date.now(), gone = {};
+      if (sy()) for (const k of keys()) gone[k] = { deleted: true, u: t }; // so the wipe reaches the other devices
+      Object.assign(S, { days: gone, prev: [], prevU: t, demo: false, baseline: '', baselineU: t, lastBackup: 0 });
+      save(); render();
+    };
   }
 
   const csvText = (from = '') => {
     const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = Object.keys(S.days).sort().filter((k) => k >= from).map((k) => { const e = S.days[k]; return [k, e.t, e.pain, e.hours, e.med ? 'yes' : '', e.medName, e.rest ? 'yes' : '', e.missed ? 'yes' : '', e.note].map(q).join(','); });
+    const rows = keys().sort().filter((k) => k >= from).map((k) => { const e = S.days[k]; return [k, e.t, e.pain, e.hours, e.med ? 'yes' : '', e.medName, e.rest ? 'yes' : '', e.missed ? 'yes' : '', e.note].map(q).join(','); });
     return ['date,type,pain,hours,medication,medication name,had to lie down,missed work or school,note', ...rows].join('\n');
   };
   const last12 = () => C.lastMonths(S.days, now.getFullYear(), now.getMonth() + 1, 12);
@@ -353,9 +367,9 @@
   }
   function markdown() {
     const cell = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
-    const first = Object.keys(S.days).sort()[0] || todayKey;
+    const first = keys().sort()[0] || todayKey;
     const months = last12().filter((c) => C.key(c.y, c.m, C.daysIn(c.y, c.m)) >= first); // skip months before the first entry
-    const days = Object.keys(S.days).sort().map((k) => {
+    const days = keys().sort().map((k) => {
       const e = S.days[k];
       const parts = [k, e.t === 'none' ? 'No headache' : e.t === 'migraine' ? 'Migraine' : 'Headache'];
       if (e.pain != null) parts.push(`pain ${e.pain}`);
@@ -375,6 +389,112 @@
     a.href = URL.createObjectURL(new Blob([text], { type }));
     a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ---------- Sync (opt-in) ----------
+  // Firebase code is only fetched once the person opens the sync pane or is already signed in. Otherwise: no network.
+  let fbp, timer, busy, again, syncMsg = '';
+  const sy = () => !!(S.sync && S.sync.on);
+  const LINK_SENT = 'Check your email for a link from Migraine Days Log. Open it on this phone.';
+  const LINK_BAD = 'That link did not work. It may have expired. Send a new one.';
+  const setMsg = (t) => { syncMsg = t; if ($('#syncMsg')) $('#syncMsg').textContent = t; };
+  const lastText = () => (S.sync && S.sync.last ? `Last synced ${new Date(S.sync.last).toLocaleString()}` : 'Not synced yet.');
+  function loadFb() {
+    return fbp || (fbp = Promise.all([import('./vendor/firebase-sync.js'), import('./sync-config.js')]).then(([m, c]) => {
+      const app = m.initializeApp(c.firebaseConfig);
+      return { m, auth: m.getAuth(app), db: m.getFirestore(app) };
+    }).catch((e) => { fbp = null; throw e; }));
+  }
+  const authUser = ({ m, auth }) => new Promise((res) => { const un = m.onAuthStateChanged(auth, (u) => { un(); res(u); }); });
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(sync, 3000); };
+  async function sync() {
+    if (!sy() || S.demo) return;
+    if (busy) { again = true; return; }
+    busy = true; setMsg('Syncing...');
+    try {
+      const f = await loadFb();
+      const user = await authUser(f);
+      if (!user) { delete S.sync; save(true); setMsg('You were signed out. Sign in again to keep syncing.'); if (ui.tab === 'more') render(); return; }
+      const ref = f.m.doc(f.db, 'users', user.uid), snap = await f.m.getDoc(ref);
+      const sig = () => JSON.stringify([S.days, S.prev, S.baseline, S.unlocked]), before = sig();
+      Object.assign(S, Merge.merge(S, snap.exists() ? snap.data() : null));
+      await f.m.setDoc(ref, JSON.parse(JSON.stringify({ v: 1, days: S.days, prev: S.prev, prevU: S.prevU, baseline: S.baseline, baselineU: S.baselineU, unlocked: S.unlocked, updatedAt: Date.now() })));
+      S.sync.last = Date.now(); save(true); setMsg('Synced.');
+      if ($('#syncLast')) $('#syncLast').textContent = lastText();
+      if (before !== sig() && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) render(); // another device changed something
+    } catch { setMsg('Not synced yet. Will retry.'); }
+    finally { busy = false; if (again) { again = false; schedule(); } }
+  }
+  async function sendLink(email) {
+    const f = await loadFb();
+    await f.m.sendSignInLinkToEmail(f.auth, email, { url: location.origin + '/app/?signin=1', handleCodeInApp: true });
+    localStorage.setItem('mdl.signinEmail', email);
+  }
+  async function finishLink(email) {
+    const f = await loadFb();
+    await f.m.signInWithEmailLink(f.auth, email, location.href);
+    localStorage.removeItem('mdl.signinEmail');
+    history.replaceState(null, '', location.pathname);
+    S.sync = { email, on: true }; ui.pending = false; setMsg(''); save(true); render(); sync();
+  }
+  function syncPane() {
+    const priv = '<a href="../privacy/" target="_blank" rel="noopener">Privacy policy</a>';
+    const paused = '<p class="hl">Sync is paused while DEMO data is showing. Remove the demo data to use sync.</p>';
+    let body;
+    if (sy()) body = `<p>Synced as <b>${esc(S.sync.email)}</b></p>
+      <p class="muted" id="syncLast">${lastText()}</p>${S.demo ? paused : ''}
+      <p class="muted" id="syncMsg" role="status">${esc(syncMsg)}</p>
+      <div class="row"><button class="primary" id="syncNow">Sync now</button><button id="signOut">Sign out</button></div>
+      ${ui.relogin ? '<p><button id="resend">Email me a new sign-in link</button></p>' : ''}
+      <p><button class="danger" id="delSynced">Delete my synced data and account</button></p>
+      <p class="muted">${priv}</p>`;
+    else if (S.demo) body = paused;
+    else body = `<p class="muted">Turn on sync to keep a copy of your log in your account. Lose your phone or clear your browser, and you can get it back by signing in with your email. No password.</p>
+      <label class="check"><input type="checkbox" id="syncOk"><span>I agree that Migraine Days Log stores my log entries on Google Firebase servers so I can sync and restore them. I can delete them at any time. ${priv}</span></label>
+      <label for="syncEmail">Email</label><input type="email" id="syncEmail" required autocomplete="email" value="${esc(localStorage.getItem('mdl.signinEmail') || '')}">
+      <p><button class="primary" id="syncSend" disabled>${ui.pending ? 'Finish signing in' : 'Email me a sign-in link'}</button></p>
+      <p class="muted" id="syncMsg" role="status">${esc(syncMsg)}</p>`;
+    return `<details class="card" id="syncPane" ${ui.syncOpen ? 'open' : ''}><summary><h3>Sync and back up</h3></summary>${body}</details>`;
+  }
+  function wireSync() {
+    $('#syncPane').ontoggle = (ev) => {
+      ui.syncOpen = ev.target.open;
+      if (ev.target.open && !sy()) loadFb().catch(() => setMsg('Sync could not load. Check your connection.'));
+    };
+    const on = (id, fn) => { if ($(id)) $(id).onclick = fn; };
+    if ($('#syncOk')) $('#syncOk').onchange = (ev) => { $('#syncSend').disabled = !ev.target.checked; };
+    on('#syncSend', async () => {
+      const em = $('#syncEmail');
+      if (!em.reportValidity()) return;
+      $('#syncSend').disabled = true; setMsg('Working...');
+      try {
+        if (ui.pending) await finishLink(em.value.trim());
+        else { await sendLink(em.value.trim()); setMsg(LINK_SENT); }
+      } catch (e) { setMsg(ui.pending ? LINK_BAD : e?.code === 'auth/quota-exceeded' ? 'We can’t send more sign-in links today. Please try again tomorrow. Your log is safe on this phone meanwhile.' : 'The link could not be sent. Check the address and your connection, then try again.'); }
+      if ($('#syncSend')) $('#syncSend').disabled = false;
+    });
+    on('#syncNow', () => { clearTimeout(timer); sync(); });
+    on('#resend', async () => { try { await sendLink(S.sync.email); setMsg(LINK_SENT); } catch { setMsg('The link could not be sent. Try again.'); } });
+    on('#signOut', async () => {
+      clearTimeout(timer);
+      try { const f = await loadFb(); await f.m.signOut(f.auth); } catch { /* the app stops syncing either way */ }
+      delete S.sync; setMsg(''); save(true); render();
+    });
+    on('#delSynced', async () => {
+      if (!confirm('Delete your synced copy and your sign-in account? Your log on this phone stays. This cannot be undone.')) return;
+      clearTimeout(timer); busy = true; let docGone = false;
+      try {
+        const f = await loadFb(), user = await authUser(f);
+        if (!user) throw new Error('signed out');
+        await f.m.deleteDoc(f.m.doc(f.db, 'users', user.uid)); docGone = true;
+        await f.m.deleteUser(user);
+        delete S.sync; ui.relogin = false; setMsg('Your synced copy and your account were deleted. Your log on this phone stays.');
+      } catch (err) {
+        if (docGone && err.code === 'auth/requires-recent-login') { ui.relogin = true; setMsg('Your synced copy was deleted, but your account was not. For your safety, please sign in again with a new email link, then tap Delete again.'); }
+        else setMsg(docGone ? 'Your synced copy was deleted, but your account was not. Try again.' : 'Nothing was deleted. Check your connection and try again.');
+      }
+      busy = false; save(true); render();
+    });
   }
 
   // Six months of made-up entries that improve over time, for screenshots. Fixed seed so it always looks the same.
@@ -409,4 +529,14 @@
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
   render();
+  window.addEventListener('online', sync);
+  if (location.search.includes('signin=1')) { // opened from the emailed link
+    ui.tab = 'more'; ui.syncOpen = true; render();
+    loadFb().then(async (f) => {
+      if (!f.m.isSignInWithEmailLink(f.auth, location.href)) return;
+      const email = localStorage.getItem('mdl.signinEmail');
+      if (email) await finishLink(email);
+      else { ui.pending = true; setMsg('This link was opened in a different browser. Enter the same email to finish signing in.'); render(); }
+    }).catch(() => { setMsg(LINK_BAD); render(); });
+  } else if (sy()) sync();
 })();

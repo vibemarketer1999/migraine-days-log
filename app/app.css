@@ -78,7 +78,7 @@ button.primary { background: var(--ink); color: var(--on-ink); border-color: var
 button.primary:hover { background: #fff8f0; }
 button.danger { border-color: var(--migraine); color: #ffd9d3; }
 :is(button, input, select, textarea, a):focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-input[type=text], input[type=number], input[type=date], input[type=month], select, textarea {
+input[type=text], input[type=email], input[type=number], input[type=date], input[type=month], select, textarea {
   width: 100%; min-height: 48px; padding: 11px 14px; border-radius: 16px;
   background: var(--field); border: 1px solid rgba(255, 244, 232, .3); color: var(--ink);
 }
@@ -214,3 +214,12 @@ blockquote { margin: 10px 0; padding: 2px 0 2px 14px; border-left: 1px solid rgb
 .hl { padding: 12px 14px; border-radius: 16px; background: rgba(230, 166, 81, .18); border: 1px solid rgba(230, 166, 81, .55); }
 .card ul.muted { padding-left: 1.2em; margin: 8px 0; }
 .card ul.muted li { margin: 4px 0; }
+
+/* sync pane */
+#syncPane summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; cursor: pointer; list-style: none; }
+#syncPane summary::-webkit-details-marker { display: none; }
+#syncPane summary::after { content: "+"; font-size: 1.5rem; line-height: 1; }
+#syncPane[open] summary::after { content: "\2212"; }
+#syncPane summary h3 { margin: 0; }
+#syncPane[open] > summary { margin-bottom: 10px; }
+#syncPane label.check span { font-size: .92rem; }
