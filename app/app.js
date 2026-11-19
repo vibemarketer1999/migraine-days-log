@@ -17,9 +17,10 @@
   function read() {
     try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
   }
+  const snapshot = () => JSON.stringify(S); // the stored state and the backup file are the same JSON
   function save() {
-    try { localStorage.setItem(STORE, JSON.stringify(S)); }
-    catch { alert('This entry could not be saved. Your browser may be in private mode or out of storage. Download a backup from More.'); }
+    try { localStorage.setItem(STORE, snapshot()); }
+    catch { alert('This entry could not be saved. Your browser may be in private mode or out of storage. Use "Save a copy" in More.'); }
   }
   // Reports and averages only use complete months, so a half-finished month never drags an average down.
   const lastFull = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -255,13 +256,29 @@
         <label for="code">Code from your purchase email</label><input type="text" id="code" autocomplete="off" autocapitalize="characters">
         <p class="row"><button class="primary" id="unlock">Unlock</button><a href="${SALES_URL}"><button>Get the full log</button></a></p><p id="codeMsg" class="muted" role="status"></p>`}</section>
       ${prev}
-      <section class="card"><h3>Backup</h3>
-      <p class="muted">Your entries are saved only in this browser on this device. We never receive them, so we can't restore them for you. They can be erased if you clear browsing data, use private mode or switch browser or phone, and on iPhone if you don't open the log for a while. Download a backup every week. Backup, export and printed files are not encrypted, so keep them somewhere private.</p>
-      <div class="row"><button class="primary" id="backup">Download backup</button><button id="restoreBtn">Restore from file</button></div>
+      <section class="card"><h3>Keep your log safe</h3>
+      <p id="persistMsg" class="muted" role="status"></p>
+      ${/iPhone|iPad/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches ? '<p class="hl">On iPhone, add this to your Home Screen (Share \u2192 Add to Home Screen) so Safari doesn\u2019t clear it.</p>' : ''}
+      <p class="muted">Your entries are saved only in this browser on this device. We never receive them, so we can\u2019t restore them for you. What erases the log:</p>
+      <ul class="muted">
+        <li>Clearing \u201ccookies and site data\u201d, or all browsing data.</li>
+        <li>Private or incognito windows.</li>
+        <li>On iPhone, not opening it in Safari for a week, unless it is on the home screen.</li>
+        <li>Switching phone or browser without restoring a copy.</li>
+      </ul>
+      <p class="muted">Rejecting cookie banners or clearing only your history does not erase it.</p>
+      <div class="row"><button class="primary" id="backup">Save a copy</button><button id="restoreBtn">Restore from file</button></div>
       <input type="file" id="restore" accept="application/json,.json" hidden>
-      ${full() ? '<p><button id="csv">Export days as a spreadsheet (CSV)</button></p>' : ''}
       <p class="muted" id="backupMsg" role="status">${S.lastBackup ? `Last backup: ${new Date(S.lastBackup).toLocaleDateString()}` : 'No backup yet.'}</p>
+      <p class="muted">Backup, export and printed files are not encrypted, so keep them somewhere private.</p>
       </section>
+      ${full() ? `<section class="card"><h3>Export</h3>
+      <div class="row"><button id="csv">Spreadsheet (CSV)</button><button id="md">Obsidian / Markdown</button></div>
+      <p class="muted">The spreadsheet is for Excel or Google Sheets.</p>
+      <p class="muted">Ask your AI (ChatGPT or Claude). Copies your entries and a request, then opens the chat to paste into.</p>
+      <div class="row"><button id="askGpt">ChatGPT</button><button id="askClaude">Claude</button></div>
+      <p class="muted" id="aiMsg" role="status"></p>
+      <textarea id="aiText" rows="6" readonly hidden></textarea></section>` : lockCard('Spreadsheet, Markdown and AI export')}
       <section class="card"><h3>Keep it on your home screen</h3>
       <p class="muted">In your browser menu choose "Add to Home Screen". The log then opens like an app, works offline, and iPhone is less likely to clear its data.</p>
       <h3>Try it with sample data</h3>
@@ -281,7 +298,20 @@
       save(); render();
     };
     view.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { S.prev.splice(Number(b.dataset.del), 1); save(); render(); }));
-    $('#backup').onclick = () => { S.lastBackup = Date.now(); save(); download(`migraine-log-backup-${todayKey}.json`, JSON.stringify(S), 'application/json'); render(); };
+    const persistMsg = (p) => { $('#persistMsg').textContent = p ? 'This browser has agreed to keep your log.' : 'This browser may clear your log to save space. Saving a copy protects it.'; };
+    if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(persistMsg).catch(() => persistMsg(false));
+    else persistMsg(false);
+    $('#backup').onclick = async () => {
+      const name = `migraine-log-backup-${todayKey}.json`, text = snapshot();
+      try {
+        const file = new File([text], name, { type: 'application/json' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], title: 'Migraine Days Log backup' }); }
+          catch (err) { if (err && err.name === 'AbortError') return; download(name, text, 'application/json'); } // share refused: save a file instead
+        } else download(name, text, 'application/json');
+      } catch { $('#backupMsg').textContent = 'The copy could not be saved. Try again.'; return; }
+      S.lastBackup = Date.now(); save(); render();
+    };
     $('#restoreBtn').onclick = () => $('#restore').click();
     $('#restore').onchange = async (ev) => {
       try {
@@ -292,13 +322,52 @@
         save(); render();
       } catch { $('#backupMsg').textContent = 'That file is not a Migraine Days Log backup.'; }
     };
-    if ($('#csv')) $('#csv').onclick = () => {
-      const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const rows = Object.keys(S.days).sort().map((k) => { const e = S.days[k]; return [k, e.t, e.pain, e.hours, e.med ? 'yes' : '', e.medName, e.rest ? 'yes' : '', e.missed ? 'yes' : '', e.note].map(q).join(','); });
-      download(`migraine-log-${todayKey}.csv`, ['date,type,pain,hours,medication,medication name,had to lie down,missed work or school,note', ...rows].join('\n'), 'text/csv');
-    };
+    if ($('#csv')) {
+      $('#csv').onclick = () => download(`migraine-log-${todayKey}.csv`, csvText(), 'text/csv');
+      $('#md').onclick = () => download(`migraine-log-${todayKey}.md`, markdown(), 'text/markdown');
+      let asked = false;
+      const ask = async (url) => {
+        if (!asked && !confirm('This copies your entries so you can paste them into ChatGPT (or Claude). Once pasted, they\u2019re sent to that company. Continue?')) return;
+        asked = true;
+        const text = aiPrompt();
+        try { await navigator.clipboard.writeText(text); $('#aiText').hidden = true; $('#aiMsg').textContent = 'Copied. Paste it into the chat and send.'; }
+        catch { $('#aiText').value = text; $('#aiText').hidden = false; $('#aiText').select(); $('#aiMsg').textContent = 'Could not copy. Select the text below, copy it, then paste it into the chat.'; }
+        window.open(url, '_blank', 'noopener');
+      };
+      $('#askGpt').onclick = () => ask('https://chatgpt.com/');
+      $('#askClaude').onclick = () => ask('https://claude.ai/new');
+    }
     $('#demo').onclick = () => { S.days = demoDays(); S.demo = true; save(); render(); };
     $('#wipe').onclick = () => { if (confirm('Delete every entry on this device? This cannot be undone.')) { Object.assign(S, { days: {}, prev: [], demo: false, baseline: '', lastBackup: 0 }); save(); render(); } };
+  }
+
+  const csvText = (from = '') => {
+    const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = Object.keys(S.days).sort().filter((k) => k >= from).map((k) => { const e = S.days[k]; return [k, e.t, e.pain, e.hours, e.med ? 'yes' : '', e.medName, e.rest ? 'yes' : '', e.missed ? 'yes' : '', e.note].map(q).join(','); });
+    return ['date,type,pain,hours,medication,medication name,had to lie down,missed work or school,note', ...rows].join('\n');
+  };
+  const last12 = () => C.lastMonths(S.days, now.getFullYear(), now.getMonth() + 1, 12);
+  function aiPrompt() {
+    const f = last12()[0];
+    return 'Below is my headache diary from Migraine Days Log, as CSV. Please: 1) make a chart of headache days and migraine days per month; 2) make a calendar-style heatmap of the days; 3) summarise the numbers a doctor might ask about (headache days, migraine days and medication days per month, and any change over time). Only describe and chart the data. Don\u2019t diagnose, don\u2019t suggest treatments, and tell me to discuss any questions with my doctor.\n\nCSV:\n' + csvText(C.key(f.y, f.m, 1));
+  }
+  function markdown() {
+    const cell = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    const first = Object.keys(S.days).sort()[0] || todayKey;
+    const months = last12().filter((c) => C.key(c.y, c.m, C.daysIn(c.y, c.m)) >= first); // skip months before the first entry
+    const days = Object.keys(S.days).sort().map((k) => {
+      const e = S.days[k];
+      const parts = [k, e.t === 'none' ? 'No headache' : e.t === 'migraine' ? 'Migraine' : 'Headache'];
+      if (e.pain != null) parts.push(`pain ${e.pain}`);
+      if (e.hours != null && e.hours !== '') parts.push(`${e.hours} h`);
+      if (e.med) parts.push(e.medName ? `took medication (${e.medName})` : 'took medication');
+      if (e.rest) parts.push('had to lie down');
+      if (e.missed) parts.push('missed work or school');
+      if (e.note) parts.push(String(e.note).replace(/\r?\n/g, ' '));
+      return `- ${parts.join(' \u00b7 ')}`;
+    });
+    const prev = S.prev.length ? `\n## Preventive treatments\n\n| Treatment | Dose | Started | Stopped | Why stopped |\n| --- | --- | --- | --- | --- |\n${S.prev.map((p) => `| ${[p.name, p.dose, p.start, p.stop, p.why].map(cell).join(' | ')} |`).join('\n')}\n` : '';
+    return `---\ntags: [migraine-log]\nexported: ${todayKey}\n---\n\n# Migraine log${S.demo ? ' (DEMO DATA)' : ''}\n\nExported from Migraine Days Log on ${niceDate(todayKey)}. Self-recorded; not medical advice.\n\n## Monthly summary\n\n| Month | Headache days | Migraine days | Medication days | Severe days | Days logged |\n| --- | --- | --- | --- | --- | --- |\n${months.map((c) => `| ${monthName(c)} | ${c.headacheDays} | ${c.migraineDays} | ${c.medDays} | ${c.severeDays} | ${c.logged} of ${c.daysInMonth} |`).join('\n')}\n${prev}\n## Days\n\n${days.join('\n')}\n`;
   }
 
   function download(name, text, type) {

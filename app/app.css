@@ -209,3 +209,8 @@ blockquote { margin: 10px 0; padding: 2px 0 2px 14px; border-left: 1px solid rgb
   table { font-size: 9.5pt; }
   .scroll { overflow: visible; }
 }
+
+/* data safety */
+.hl { padding: 12px 14px; border-radius: 16px; background: rgba(230, 166, 81, .18); border: 1px solid rgba(230, 166, 81, .55); }
+.card ul.muted { padding-left: 1.2em; margin: 8px 0; }
+.card ul.muted li { margin: 4px 0; }
