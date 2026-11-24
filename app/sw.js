@@ -1,5 +1,5 @@
 // Offline shell. Bump CACHE whenever any app file changes, or phones keep the old version.
-const CACHE = 'mdl-8';
+const CACHE = 'mdl-9';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'counts.js', 'merge.js', 'manifest.json', 'icon.svg', 'fonts/newsreader-latin-opsz-normal.woff2', 'fonts/public-sans-latin-400-normal.woff2', 'fonts/public-sans-latin-600-normal.woff2'];
 
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));

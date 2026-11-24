@@ -90,7 +90,8 @@
 
   function backupNudge() {
     const hasData = keys().length > 0 && !S.demo && !sy(); // synced logs already have a copy
-    if (!hasData || Date.now() - S.lastBackup < 7 * 864e5) return '';
+    const since = S.lastBackup || Date.parse(keys().sort()[0]); // never backed up: count from the first logged day
+    if (!hasData || Date.now() - since < 7 * 864e5) return '';
     return `<div class="card notice noprint">It has been a while since your last backup. Your log lives only on this device, so a backup file is the safety net. <button data-go="more">Back up now</button></div>`;
   }
 
