@@ -65,7 +65,7 @@
         <button class="migraine" data-t="migraine" ${pressed('migraine')}>Migraine</button>
       </div>
       <p class="muted">Whether a day counts as a migraine is your call, or your doctor's definition. Log the clear days too. A day with no entry is counted as "not logged", never as headache-free.</p>
-      ${e ? '<p class="muted">Saved on this device. <button id="clearDay" class="noprint">Clear this day</button></p>' : ''}
+      ${e ? `<p class="muted">${sy() ? 'Saved, and synced to your account.' : 'Saved on this device.'} <button id="clearDay" class="noprint">Clear this day</button></p>` : ''}
       </section>
       ${detail}`;
 
@@ -89,7 +89,7 @@
   }
 
   function backupNudge() {
-    const hasData = keys().length > 0 && !S.demo;
+    const hasData = keys().length > 0 && !S.demo && !sy(); // synced logs already have a copy
     if (!hasData || Date.now() - S.lastBackup < 7 * 864e5) return '';
     return `<div class="card notice noprint">It has been a while since your last backup. Your log lives only on this device, so a backup file is the safety net. <button data-go="more">Back up now</button></div>`;
   }
@@ -321,7 +321,7 @@
       try {
         const data = JSON.parse(await ev.target.files[0].text());
         if (!data?.days || typeof data.days !== 'object') throw new Error('not a backup');
-        if (keys().length && !confirm('Replace what is on this device with the backup file?')) return;
+        if (keys().length && !confirm(sy() ? 'Replace your log with the backup file? Sync is on, so this also replaces your synced copy and the log on your other devices.' : 'Replace what is on this device with the backup file?')) return;
         const t = Date.now(), nd = {};
         for (const k in data.days) nd[k] = { ...data.days[k], u: t };
         if (sy()) for (const k of keys()) if (!nd[k]) nd[k] = { deleted: true, u: t }; // so the restore reaches the other devices
@@ -347,7 +347,7 @@
     wireSync();
     $('#demo').onclick = () => { S.days = demoDays(); S.demo = true; save(); render(); };
     $('#wipe').onclick = () => {
-      if (!confirm('Delete every entry on this device? This cannot be undone.')) return;
+      if (!confirm(sy() ? 'Delete every entry? Sync is on, so this also deletes them from your synced copy and your other devices. This cannot be undone.' : 'Delete every entry on this device? This cannot be undone.')) return;
       const t = Date.now(), gone = {};
       if (sy()) for (const k of keys()) gone[k] = { deleted: true, u: t }; // so the wipe reaches the other devices
       Object.assign(S, { days: gone, prev: [], prevU: t, demo: false, baseline: '', baselineU: t, lastBackup: 0 });
@@ -402,23 +402,30 @@
   function loadFb() {
     return fbp || (fbp = Promise.all([import('./vendor/firebase-sync.js'), import('./sync-config.js')]).then(([m, c]) => {
       const app = m.initializeApp(c.firebaseConfig);
-      return { m, auth: m.getAuth(app), db: m.getFirestore(app) };
+      // initializeAuth without a popup resolver: email links don't need Google's popup scripts, so none load.
+      return { m, auth: m.initializeAuth(app, { persistence: [m.indexedDBLocalPersistence, m.browserLocalPersistence] }), db: m.getFirestore(app) };
     }).catch((e) => { fbp = null; throw e; }));
   }
   const authUser = ({ m, auth }) => new Promise((res) => { const un = m.onAuthStateChanged(auth, (u) => { un(); res(u); }); });
   const schedule = () => { clearTimeout(timer); timer = setTimeout(sync, 3000); };
   async function sync() {
-    if (!sy() || S.demo) return;
+    if (!sy() || S.demo || S.sync.deleting) return;
     if (busy) { again = true; return; }
     busy = true; setMsg('Syncing...');
     try {
       const f = await loadFb();
       const user = await authUser(f);
       if (!user) { delete S.sync; save(true); setMsg('You were signed out. Sign in again to keep syncing.'); if (ui.tab === 'more') render(); return; }
-      const ref = f.m.doc(f.db, 'users', user.uid), snap = await f.m.getDoc(ref);
+      const ref = f.m.doc(f.db, 'users', user.uid);
       const sig = () => JSON.stringify([S.days, S.prev, S.baseline, S.unlocked]), before = sig();
-      Object.assign(S, Merge.merge(S, snap.exists() ? snap.data() : null));
-      await f.m.setDoc(ref, JSON.parse(JSON.stringify({ v: 1, days: S.days, prev: S.prev, prevU: S.prevU, baseline: S.baseline, baselineU: S.baselineU, unlocked: S.unlocked, updatedAt: Date.now() })));
+      // In a transaction, so two devices syncing at the same moment can't overwrite each other's new days.
+      const merged = await f.m.runTransaction(f.db, async (tx) => {
+        const snap = await tx.get(ref);
+        const m = Merge.merge(S, snap.exists() ? snap.data() : null);
+        tx.set(ref, JSON.parse(JSON.stringify({ v: 1, ...m, updatedAt: Date.now() })));
+        return m;
+      });
+      Object.assign(S, merged);
       S.sync.last = Date.now(); save(true); setMsg('Synced.');
       if ($('#syncLast')) $('#syncLast').textContent = lastText();
       if (before !== sig() && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) render(); // another device changed something
@@ -435,7 +442,8 @@
     await f.m.signInWithEmailLink(f.auth, email, location.href);
     localStorage.removeItem('mdl.signinEmail');
     history.replaceState(null, '', location.pathname);
-    S.sync = { email, on: true }; ui.pending = false; setMsg(''); save(true); render(); sync();
+    // a half-finished delete stays paused
+    S.sync = { email, on: true, deleting: S.sync?.deleting }; ui.pending = false; setMsg(''); save(true); render(); sync();
   }
   function syncPane() {
     const priv = '<a href="../privacy/" target="_blank" rel="noopener">Privacy policy</a>';
@@ -457,12 +465,13 @@
     return `<details class="card" id="syncPane" ${ui.syncOpen ? 'open' : ''}><summary><h3>Sync and back up</h3></summary>${body}</details>`;
   }
   function wireSync() {
-    $('#syncPane').ontoggle = (ev) => {
-      ui.syncOpen = ev.target.open;
-      if (ev.target.open && !sy()) loadFb().catch(() => setMsg('Sync could not load. Check your connection.'));
-    };
+    $('#syncPane').ontoggle = (ev) => { ui.syncOpen = ev.target.open; };
     const on = (id, fn) => { if ($(id)) $(id).onclick = fn; };
-    if ($('#syncOk')) $('#syncOk').onchange = (ev) => { $('#syncSend').disabled = !ev.target.checked; };
+    // Firebase loads only once the person has agreed, as the privacy policy says.
+    if ($('#syncOk')) $('#syncOk').onchange = (ev) => {
+      $('#syncSend').disabled = !ev.target.checked;
+      if (ev.target.checked) loadFb().catch(() => setMsg('Sync could not load. Check your connection.'));
+    };
     on('#syncSend', async () => {
       const em = $('#syncEmail');
       if (!em.reportValidity()) return;
@@ -482,11 +491,14 @@
     });
     on('#delSynced', async () => {
       if (!confirm('Delete your synced copy and your sign-in account? Your log on this phone stays. This cannot be undone.')) return;
-      clearTimeout(timer); busy = true; let docGone = false;
+      clearTimeout(timer);
+      while (busy) await new Promise((r) => setTimeout(r, 200)); // let a sync in flight finish, or it would re-create the doc
+      busy = true; let docGone = false;
       try {
         const f = await loadFb(), user = await authUser(f);
         if (!user) throw new Error('signed out');
         await f.m.deleteDoc(f.m.doc(f.db, 'users', user.uid)); docGone = true;
+        S.sync.deleting = true; // no syncing until the account is gone too
         await f.m.deleteUser(user);
         delete S.sync; ui.relogin = false; setMsg('Your synced copy and your account were deleted. Your log on this phone stays.');
       } catch (err) {
